@@ -3,29 +3,34 @@ import { ViewState, Campaign } from './types';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import { CreateCampaign } from './components/CreateCampaign';
+import { CampaignService } from './services/campaignService';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>('LOGIN');
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Load from local storage on mount
+  // Load campaigns from Supabase on mount and when view changes to DASHBOARD
   useEffect(() => {
-    const saved = localStorage.getItem('buyside_campaigns');
-    if (saved) {
-      try {
-        setCampaigns(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse campaigns", e);
-      }
+    if (view === 'DASHBOARD') {
+      fetchCampaigns();
     }
-  }, []);
+  }, [view]);
 
-  // Save to local storage on change
-  useEffect(() => {
-    localStorage.setItem('buyside_campaigns', JSON.stringify(campaigns));
-  }, [campaigns]);
+  const fetchCampaigns = async () => {
+    setLoading(true);
+    try {
+      const data = await CampaignService.getCampaigns();
+      setCampaigns(data);
+    } catch (error) {
+      console.error("Failed to fetch campaigns", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateCampaign = (newCampaign: Campaign) => {
+    // Add locally for immediate feedback, though real app might re-fetch
     setCampaigns(prev => [newCampaign, ...prev]);
     setView('DASHBOARD');
   };
@@ -90,10 +95,16 @@ const App: React.FC = () => {
         </header>
 
         {view === 'DASHBOARD' && (
-          <Dashboard 
-            campaigns={campaigns} 
-            onCreateNew={() => setView('CREATE')} 
-          />
+          loading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : (
+            <Dashboard 
+              campaigns={campaigns} 
+              onCreateNew={() => setView('CREATE')} 
+            />
+          )
         )}
         
         {view === 'CREATE' && (

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { CreateCampaignDraft, Campaign, PolicyStatus } from '../types';
 import { generateKeywords, autoRateCampaign, generateSemanticDescription } from '../services/geminiService';
-import { Loader2 } from 'lucide-react'; // Simulating import, will implement simple SVG below
+import { CampaignService } from '../services/campaignService';
 
 interface CreateCampaignProps {
   onSave: (campaign: Campaign) => void;
@@ -16,6 +16,8 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onSave, onCancel
     adImageContent: null,
   });
   
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [loadingStep, setLoadingStep] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -23,8 +25,13 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onSave, onCancel
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setImageFile(file);
+      // Create local preview
       const reader = new FileReader();
       reader.onloadend = () => {
+        setPreviewUrl(reader.result as string);
+        // We still set adImageContent to base64 for the Gemini API analysis locally
+        // but we will upload the actual file to storage for persistence.
         const base64String = (reader.result as string).replace('data:', '').replace(/^.+,/, '');
         setDraft(prev => ({ ...prev, adImageContent: base64String }));
       };
@@ -49,9 +56,22 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onSave, onCancel
       setLoadingStep('Training offline embedding & vectorizing...');
       const semanticDescription = await generateSemanticDescription(draft.adTextContent, draft.adImageContent);
 
+      // 4. Upload Image to Backend Storage (Supabase)
+      let finalImageUrl = null;
+      if (imageFile) {
+        setLoadingStep('Uploading assets to Supabase Storage...');
+        finalImageUrl = await CampaignService.uploadImage(imageFile);
+      }
+
+      // 5. Save to Database
+      setLoadingStep('Saving campaign to database...');
       const newCampaign: Campaign = {
         id: crypto.randomUUID(),
-        ...draft,
+        name: draft.name,
+        budget: draft.budget,
+        adTextContent: draft.adTextContent,
+        // Use the storage URL if upload succeeded, otherwise null (or base64 if we wanted to fallback, but URL is better)
+        adImageContent: finalImageUrl, 
         keywords,
         reviewPolicy: {
           ...policyReview,
@@ -61,10 +81,12 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onSave, onCancel
         createdAt: Date.now()
       };
 
+      await CampaignService.createCampaign(newCampaign);
+
       onSave(newCampaign);
     } catch (error) {
       console.error("Campaign creation failed", error);
-      alert("Failed to create campaign. Please try again.");
+      alert("Failed to create campaign. Check console for details.");
     } finally {
       setIsProcessing(false);
     }
@@ -137,14 +159,14 @@ export const CreateCampaign: React.FC<CreateCampaignProps> = ({ onSave, onCancel
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Creative Image</label>
               <div 
-                className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition ${draft.adImageContent ? 'border-indigo-300 bg-indigo-50' : ''}`}
+                className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition ${previewUrl ? 'border-indigo-300 bg-indigo-50' : ''}`}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <div className="space-y-1 text-center">
-                  {draft.adImageContent ? (
+                  {previewUrl ? (
                     <div className="relative">
                       <img 
-                        src={`data:image/jpeg;base64,${draft.adImageContent}`} 
+                        src={previewUrl} 
                         alt="Preview" 
                         className="mx-auto h-48 object-cover rounded-md shadow-sm"
                       />

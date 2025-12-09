@@ -1,5 +1,5 @@
 {
   "name": "Buyside AI",
-  "description": "A next-generation Campaign Management System leveraging Gemini to automate ad reviews, suggest high-value keywords, and generate semantic embeddings for ad retrieval.",
+  "description": "Intelligent Campaign Management System. Features: Gemini-powered ad review agent, multimodal keyword suggestion, and semantic embedding generation for offline retrieval training.",
   "requestFramePermissions": []
 }

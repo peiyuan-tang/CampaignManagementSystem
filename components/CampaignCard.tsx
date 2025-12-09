@@ -9,12 +9,20 @@ export const CampaignCard: React.FC<CampaignCardProps> = ({ campaign }) => {
   const isApproved = campaign.reviewPolicy.status === PolicyStatus.APPROVED;
   const isRejected = campaign.reviewPolicy.status === PolicyStatus.REJECTED;
 
+  // Helper to determine image source (URL or Base64)
+  const getImageSrc = (content: string) => {
+    if (content.startsWith('http')) {
+      return content;
+    }
+    return `data:image/jpeg;base64,${content}`;
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow duration-200 flex flex-col h-full">
       <div className="relative h-48 bg-gray-100 flex items-center justify-center overflow-hidden">
         {campaign.adImageContent ? (
           <img 
-            src={`data:image/jpeg;base64,${campaign.adImageContent}`} 
+            src={getImageSrc(campaign.adImageContent)} 
             alt={campaign.name} 
             className="w-full h-full object-cover"
           />
